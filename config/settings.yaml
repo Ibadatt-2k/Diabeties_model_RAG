@@ -1,0 +1,30 @@
+chunking:
+  chunk_size: 750       # tokens per chunk (500–800 range)
+  chunk_overlap: 100    # token overlap between consecutive chunks
+
+retrieval:
+  vector_top_k: 20      # candidates from vector search
+  bm25_top_k: 20        # candidates from BM25 search
+  final_top_k: 5        # chunks passed to the LLM after reranking
+  rrf_k: 60             # RRF constant — higher = smoother rank fusion
+
+reranker:
+  model: cross-encoder/ms-marco-MiniLM-L-6-v2   # local, free, fast
+  top_n: 5              # keep top N after cross-encoder rescoring
+
+embedding:
+  model: all-MiniLM-L6-v2   # local sentence-transformers model
+
+llm:
+  provider: groq
+  model: llama-3.3-70b-versatile   # best free model on Groq
+  temperature: 0.0      # deterministic answers for citations
+  max_tokens: 1024
+
+citation:
+  # Cross-encoder score threshold — scores below this = decline to answer
+  # ms-marco-MiniLM scores range roughly from -10 to +10
+  # Healthcare domain: tightened from -5.0 to 0.0 — the system must have
+  # at least marginal confidence in the retrieved chunk before answering.
+  # Better to decline than to produce a wrong clinical answer.
+  decline_threshold: 0.0
