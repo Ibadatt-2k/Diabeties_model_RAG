@@ -13,10 +13,6 @@ import argparse
 import json
 from pathlib import Path
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 DATASET_PATH = Path("data/eval/golden_dataset.json")
 
 
@@ -55,7 +51,7 @@ def interactive_curation(collection_name: str = "docs") -> None:
       3. You decide: approve / edit / skip.
       4. Approved entries go into golden_dataset.json.
     """
-    from src.pipeline import RAGPipeline   # late import so load_dotenv() runs first
+    from src.pipeline import RAGPipeline
 
     pipeline = RAGPipeline(collection_name=collection_name, phase=2)
     dataset  = _load()

@@ -18,12 +18,13 @@ import json
 import os
 from pathlib import Path
 
+import numpy as np
+
 DATASET_PATH = Path("data/eval/golden_dataset.json")
 RESULTS_PATH = Path("data/eval/eval_results.json")
 
 
 def run_evaluation(collection_name: str = "docs") -> dict:
-    # Late imports so env is loaded first
     from datasets import Dataset
     from langchain_groq import ChatGroq
     from langchain_huggingface import HuggingFaceEmbeddings
@@ -36,6 +37,7 @@ def run_evaluation(collection_name: str = "docs") -> dict:
         context_recall,
         faithfulness,
     )
+    from ragas.run_config import RunConfig
 
     from src.pipeline import RAGPipeline
 
@@ -60,7 +62,6 @@ def run_evaluation(collection_name: str = "docs") -> dict:
 
         questions.append(q)
         answers.append(result["answer"])
-        # Full chunk content for RAGAS — not just the preview
         contexts.append([s["content"] for s in result.get("sources", [])])
         ground_truths.append(entry["ground_truth"])
 
@@ -74,9 +75,9 @@ def run_evaluation(collection_name: str = "docs") -> dict:
         "ground_truth": ground_truths,
     })
 
-    # ── configure RAGAS to use Groq LLM + local embeddings ───────────────────
+    # ── configure LLM + embeddings ────────────────────────────────────────────
     groq_llm = LangchainLLMWrapper(ChatGroq(
-        model        = "llama-3.3-70b-versatile",
+        model        = "llama-3.1-8b-instant",
         temperature  = 0,
         groq_api_key = os.getenv("GROQ_API_KEY"),
     ))
@@ -92,31 +93,36 @@ def run_evaluation(collection_name: str = "docs") -> dict:
         metrics    = [faithfulness, answer_relevancy, context_precision, context_recall],
         llm        = groq_llm,
         embeddings = local_embeddings,
+        run_config = RunConfig(timeout=180, max_workers=1),
     )
 
     # ── print summary ─────────────────────────────────────────────────────────
+    df = scores.to_pandas()
     summary = {
-        "faithfulness":      float(scores["faithfulness"]),
-        "answer_relevancy":  float(scores["answer_relevancy"]),
-        "context_precision": float(scores["context_precision"]),
-        "context_recall":    float(scores["context_recall"]),
+        metric: float(np.nanmean(df[metric]))
+        for metric in ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
+        if metric in df.columns
     }
 
     print("\n" + "=" * 55)
     print("  RAGAS Evaluation Results")
     print("=" * 55)
     for metric, score in summary.items():
-        bar   = "█" * int(score * 20)
-        empty = "░" * (20 - int(score * 20))
-        print(f"  {metric:<22} {score:.4f}  {bar}{empty}")
+        if np.isnan(score):
+            print(f"  {metric:<22} N/A   (all jobs failed)")
+        else:
+            bar   = "█" * int(score * 20)
+            empty = "░" * (20 - int(score * 20))
+            print(f"  {metric:<22} {score:.4f}  {bar}{empty}")
     print("=" * 55)
 
-    # ── save detailed results ─────────────────────────────────────────────────
+    # ── save results ──────────────────────────────────────────────────────────
     RESULTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    per_q = df.where(df.notna(), other=None).to_dict(orient="records")
     output = {
         "summary":      summary,
         "dataset_size": len(golden),
-        "per_question": scores.to_pandas().to_dict(orient="records"),
+        "per_question": per_q,
     }
     with open(RESULTS_PATH, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2, ensure_ascii=False)

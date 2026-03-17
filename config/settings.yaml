@@ -17,7 +17,7 @@ embedding:
 
 llm:
   provider: groq
-  model: llama-3.3-70b-versatile   # best free model on Groq
+  model: llama-3.1-8b-instant
   temperature: 0.0      # deterministic answers for citations
   max_tokens: 1024
 
@@ -27,4 +27,4 @@ citation:
   # Healthcare domain: tightened from -5.0 to 0.0 — the system must have
   # at least marginal confidence in the retrieved chunk before answering.
   # Better to decline than to produce a wrong clinical answer.
-  decline_threshold: 0.0
+  decline_threshold: -2.0
