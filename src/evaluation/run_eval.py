@@ -76,9 +76,16 @@ def run_evaluation(collection_name: str = "docs") -> dict:
     })
 
     # ── configure LLM + embeddings ────────────────────────────────────────────
+    # llama-3.1-8b-instant: 500k TPD (5× more headroom than 70b-versatile).
+    # max_tokens=4096 prevents LLMDidNotFinishException — the root cause of the
+    # faithfulness collapse in the earlier run was the model hitting its token
+    # budget mid-generation, not model weakness. With v1.2.0 structured prompts,
+    # one-sentence claims are short and easy for the 8b model to verify correctly.
     groq_llm = LangchainLLMWrapper(ChatGroq(
         model        = "llama-3.1-8b-instant",
         temperature  = 0,
+        max_tokens   = 4096,
+        max_retries  = 3,
         groq_api_key = os.getenv("GROQ_API_KEY"),
     ))
     local_embeddings = LangchainEmbeddingsWrapper(HuggingFaceEmbeddings(
@@ -93,7 +100,7 @@ def run_evaluation(collection_name: str = "docs") -> dict:
         metrics    = [faithfulness, answer_relevancy, context_precision, context_recall],
         llm        = groq_llm,
         embeddings = local_embeddings,
-        run_config = RunConfig(timeout=180, max_workers=1),
+        run_config = RunConfig(timeout=300, max_retries=5, max_workers=1),
     )
 
     # ── print summary ─────────────────────────────────────────────────────────
